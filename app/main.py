@@ -3,21 +3,21 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from starlette.responses import HTMLResponse
-import unidecode
+import os
 
-from .db import get_db, SessionLocal
-from .models import Student, Base, engine
-
-# Criar as tabelas no banco de dados
-Base.metadata.create_all(bind=engine)
+from .db import get_db, init_db
+from .models import Student
 
 app = FastAPI()
 templates = Jinja2Templates(directory="app/templates")
 
+# Configuração da URL do banco de dados a partir das variáveis de ambiente
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/mydatabase.db")
+
 
 @app.on_event("startup")
 async def on_startup():
-    pass
+    await init_db()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -57,21 +57,16 @@ async def add_student(
     email: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
-    # Remover acentos e converter para minúsculas
-    nome_sem_acentos = unidecode.unidecode(nome).lower()
-    sobrenome_sem_acentos = unidecode.unidecode(sobrenome).lower()
+    apelido = (nome + sobrenome).lower().replace(" ", "")
+    history = f"Início do curso."
 
-    # Concatenar nome e sobrenome sem espaços para gerar o apelido
-    apelido = nome_sem_acentos + sobrenome_sem_acentos
-
-    # Criar novo aluno no banco de dados
     student = Student(
         nome=nome,
         sobrenome=sobrenome,
         telefone=telefone,
         email=email,
         apelido=apelido,
-        history=f"Nome: {nome} Sobrenome: {sobrenome} Telefone: {telefone} Email: {email}",
+        history=history,
     )
     db.add(student)
     try:
@@ -81,7 +76,9 @@ async def add_student(
         )
     except Exception as e:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Could not add student")
+        raise HTTPException(
+            status_code=400, detail="Não foi possível adicionar o aluno."
+        )
 
 
 @app.get("/adm/students", response_class=HTMLResponse)
