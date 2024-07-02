@@ -1,15 +1,16 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
   <head>
-    <title>Students List</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lista de Alunos</title>
   </head>
   <body>
-    <h1>Students List</h1>
+    <h1>Lista de Alunos</h1>
     <ul>
       {% for student in students %}
-      <li>{{ student.name }}</li>
+      <li>{{ student.nome }} - {{ student.apelido }}</li>
       {% endfor %}
     </ul>
-    <a href="/">Go Back</a>
   </body>
 </html>

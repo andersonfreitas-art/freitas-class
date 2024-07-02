@@ -3,9 +3,13 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from starlette.responses import HTMLResponse
+import unidecode
 
-from .db import get_db, init_db
-from .models import Student
+from .db import get_db, SessionLocal
+from .models import Student, Base, engine
+
+# Criar as tabelas no banco de dados
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 templates = Jinja2Templates(directory="app/templates")
@@ -13,7 +17,7 @@ templates = Jinja2Templates(directory="app/templates")
 
 @app.on_event("startup")
 async def on_startup():
-    await init_db()
+    pass
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -21,19 +25,21 @@ async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@app.get("/{name}", response_class=HTMLResponse)
-async def search_name(request: Request, name: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Student).filter_by(name=name))
+@app.get("/{apelido}", response_class=HTMLResponse)
+async def search_student_by_apelido(
+    request: Request, apelido: str, db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(Student).filter_by(apelido=apelido))
     student = result.scalars().first()
 
     if student:
         return templates.TemplateResponse(
             "history.html",
-            {"request": request, "name": student.name, "history": student.history},
+            {"request": request, "name": student.nome, "history": student.history},
         )
     else:
         return templates.TemplateResponse(
-            "not_found.html", {"request": request, "name": name}
+            "not_found.html", {"request": request, "name": apelido}
         )
 
 
@@ -45,16 +51,33 @@ async def add_student_form(request: Request):
 @app.post("/adm/add_student", response_class=HTMLResponse)
 async def add_student(
     request: Request,
-    name: str = Form(...),
-    history: str = Form(...),
+    nome: str = Form(...),
+    sobrenome: str = Form(...),
+    telefone: str = Form(...),
+    email: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
-    student = Student(name=name, history=history)
+    # Remover acentos e converter para minúsculas
+    nome_sem_acentos = unidecode.unidecode(nome).lower()
+    sobrenome_sem_acentos = unidecode.unidecode(sobrenome).lower()
+
+    # Concatenar nome e sobrenome sem espaços para gerar o apelido
+    apelido = nome_sem_acentos + sobrenome_sem_acentos
+
+    # Criar novo aluno no banco de dados
+    student = Student(
+        nome=nome,
+        sobrenome=sobrenome,
+        telefone=telefone,
+        email=email,
+        apelido=apelido,
+        history=f"Nome: {nome} Sobrenome: {sobrenome} Telefone: {telefone} Email: {email}",
+    )
     db.add(student)
     try:
         await db.commit()
         return templates.TemplateResponse(
-            "add_student_success.html", {"request": request, "name": name}
+            "add_student_success.html", {"request": request, "name": nome}
         )
     except Exception as e:
         await db.rollback()
